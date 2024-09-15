@@ -1,6 +1,8 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog
 from moviepy.editor import VideoFileClip
+import whisper
+from elevenlabs import generate, save
 
 class AudioExtractor(QWidget):
     def __init__(self):
@@ -16,6 +18,14 @@ class AudioExtractor(QWidget):
             mp3_file_path = mp4_file_path.replace(".mp4", ".mp3")
             self.extract_audio_from_video(mp4_file_path, mp3_file_path)
             print(f"Audio extracted and saved as: {mp3_file_path}")
+            
+            # Transcribe the audio to text
+            transcript = self.transcribe_audio(mp3_file_path)
+            print(f"Transcribed text: {transcript}")
+            
+            # Generate new audio with Eleven Labs voice
+            new_mp3_file_path = mp3_file_path.replace("mp3", "_new_voice.mp3")
+            self.generate_new_voice(transcript, new_mp3_file_path)
         else:
             print("No file selected.")
         
@@ -30,6 +40,27 @@ class AudioExtractor(QWidget):
                 print("No audio found in the video.")
         except Exception as e:
             print(f"An error occured: {e}")
+            
+    def transcribe_audio(self, mp3_file):
+        # Using Whisper (from OpenAI) for local transcription
+        try:
+            model = whisper.load_model("base")
+            result = model.transcribe(mp3_file)
+            return result['text']
+        except Exception as e:
+            print(f"Transcription failed: {e}")
+            return ""
+        
+    def generate_new_voice(self, text, output_file):
+        # Use Eleven Labs to generate new voice
+        try:
+            api_key = "YOUR_ELEVEN_LABS_API_KEY" # Replace with your Eleven Labs API Key
+            audio = generate(text=text, voice="Rachel", api_key=api_key)
+            save(output_file, audio)
+            print(f"New voice audio saved as: {output_file}")
+        except Exception as e:
+            print(f"Voice generation failed: {e}")
+            
     
 if __name__=='__main__':
     app = QApplication(sys.argv)
