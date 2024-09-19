@@ -1,13 +1,22 @@
 import sys
 import os
-from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog
+from dotenv import load_dotenv
+from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog, QMessageBox
 from moviepy.editor import VideoFileClip
 import requests
 import json
 
-os.environ["QT_QPA_PLATFORM"] = "offscreen"
+# Load environm,ent variables from .env file
+load_dotenv()
 
 class AudioExtractor(QWidget):
+    
+    def show_message(self, title, message):
+        msg = QMessageBox()
+        msg.setWindowTitle(title)
+        msg.setText(message)
+        msg.exec_()
+        
     def __init__(self):
         super().__init__()
         self.initUI()
@@ -26,26 +35,31 @@ class AudioExtractor(QWidget):
             new_mp3_file_path = mp3_file_path.replace("mp3", "_new_voice.mp3")
             self.generate_new_voice(mp3_file_path, new_mp3_file_path)
         else:
-            print("No file selected.")
+            self.show_message("Error", "No file selected.")
         
     def extract_audio_from_video(self, mp4_file, mp3_file):
-        # Load the video file and extract audio
+        # Extract audio from the video file.
         try:
             video = VideoFileClip(mp4_file)
             audio = video.audio
             if audio:
                 audio.write_audiofile(mp3_file, codec='mp3')
             else:
-                print("No audio found in the video.")
+                self.show_message("Error", "No audio found in the video.")
         except Exception as e:
-            print(f"An error occured: {e}")
+            self.show_message("Error", f"An error occured while extracting audio: {e}")
     
     def generate_new_voice(self, mp3_file, output_file):
-        # Use Eleven Labs to generate new voice
+        # Use Eleven Labs to generate new voice from the extracted audio.
         try:
+            # Load the API key from environment variables
+            XI_API_KEY = os.getenv("ELEVEN_LABS_API_KEY")
+            if not XI_API_KEY:
+                self.show_message("Error", "API key not found. Please check your .env file.")
+                return
+            
             # Define constants for the script
             CHUNK_SIZE = 1024  # Size of chunks to read/write at a time
-            XI_API_KEY = "sk_62b197807bdcccb4d61086272fc8946b82275b08eeebc5c5"  # Your API key for authentication
             VOICE_ID = "EXAVITQu4vr4xnSDxMaL"  # ID of the voice model to use
             AUDIO_FILE_PATH = mp3_file  # Path to the input audio file
             OUTPUT_PATH = output_file  # Path to save the output audio file
@@ -63,21 +77,20 @@ class AudioExtractor(QWidget):
             # Note: voice settings are converted to a JSON string
             data = {
                 "model_id": "eleven_english_sts_v2",
-                "voice_settings": json.dumps({
+                "voice_settings": {
                     "stability": 0.5,
                     "similarity_boost": 0.8,
                     "style": 0.0,
                     "use_speaker_boost": True
-                })
+                }
             }
 
             # Set up the files to send with the request, including the input audio file
-            files = {
-                "audio": open(AUDIO_FILE_PATH, "rb")
-            }
-
-            # Make the POST request to the STS API with headers, data, and files, enabling streaming response
-            response = requests.post(sts_url, headers=headers, data=data, files=files, stream=True)
+            
+            with open(AUDIO_FILE_PATH, "rb") as audio_file:
+                files = {"audio": audio_file}
+                # Make the POST request to the STS API with headers, data, and files, enabling streaming response
+                response = requests.post(sts_url, headers=headers, data=data, files=files, stream=True)
 
             # Check if the request was successful
             if response.ok:
@@ -90,9 +103,9 @@ class AudioExtractor(QWidget):
                 print("Audio stream saved successfully.")
             else:
                 # Print the error message if the request was not successful
-                print(response.text)
+                self.show_message("Error", f"Request failed with status code {response.status_code}: {response.text}")
         except Exception as e:
-            print(f"Voice generation failed: {e}")
+            self.show_message("Error", f"Voice generation failed: {e}")
             
     
 if __name__=='__main__':
