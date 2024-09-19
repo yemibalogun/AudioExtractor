@@ -25,9 +25,6 @@ class AudioExtractor(QWidget):
             base_name = os.path.basename(mp4_file_path) # Extract file name from the full path
             mp3_file_path = os.path.splitext(base_name)[0] + ".mp3" # Replace .mp4 with .mp3
             
-            # Debug: Check the generated file name
-            print(f"Generated MP3 file path: {mp3_file_path}")
-            
             # Show progress dialog for audio extraction
             self.progress_dialog = QProgressDialog("Extracting audio...", "Cancel", 0, 100, self)
             self.progress_dialog.setWindowTitle("Please wait")
@@ -57,21 +54,12 @@ class AudioExtractor(QWidget):
         self.progress_dialog.close()
         self.show_message("Success", f"Audio extracted and saved as: {mp3_file_path}")
         
-        # Debug: Check the MP3 file path
-        print(f"MP3 file to be used for voice generation: {mp3_file_path}")
-        
         # Proceed to generate new voice using the extracted MP3
         new_mp3_file_path = mp3_file_path.replace("mp3", "_new_voice.mp3")
         
-         # Debug: Check the new voice file path
-        print(f"Output file for voice generation: {new_mp3_file_path}")
-    
         self.generate_new_voice(mp3_file_path, new_mp3_file_path)
         
     def generate_new_voice(self, mp3_file, output_file):
-        
-        print(f"MP3 file to be used for voice generation: {mp3_file}")
-        print(f"Output file for voice generation: {output_file}")
         
         # Show progress dialog for voice generation
         self.progress_dialog = QProgressDialog("Generating new voice...", "Cancel", 0, 100, self)
@@ -104,9 +92,6 @@ class AudioExtractionThread(QThread):
         
     def run(self):
         try:
-            print(f"Extracting from: {self.mp4_file}")
-            print(f"Saving to MP3: {self.mp3_file}")
-            
             # Extract audio from the video
             video = VideoFileClip(self.mp4_file)
             
@@ -114,9 +99,6 @@ class AudioExtractionThread(QThread):
             audio = video.audio
             
             if audio:
-                # Debug print to check the mp3 file path
-                print(f"Saving extracted audio to: {self.mp3_file}")
-                
                 # Wrtie the audio to the correct mp3 file path
                 audio.write_audiofile(self.mp3_file, codec='mp3')
                 
@@ -134,13 +116,9 @@ class VoiceGenerationThread(QThread):
         super().__init__()
         self.mp3_file = mp3_file
         self.output_file = output_file
-        print(f"Initialized VoiceGenerationThread with MP3 file: {self.mp3_file} and output file: {self.output_file}")
         
     def run(self):
         try:
-            # Debug: Check MP3 file and output path
-            print(f"MP3 file passed to the thread: {self.mp3_file}")
-            print(f"Output file path: {self.output_file}")
             
             XI_API_KEY = os.getenv("ELEVEN_LABS_API_KEY")
             if not XI_API_KEY:
