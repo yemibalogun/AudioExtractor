@@ -1,22 +1,16 @@
 import sys
 import os
 from dotenv import load_dotenv
-from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QWidget, QFileDialog, QMessageBox, QProgressDialog
+from PyQt5.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip
 import requests
-import json
 
 # Load environm,ent variables from .env file
 load_dotenv()
 
 class AudioExtractor(QWidget):
     
-    def show_message(self, title, message):
-        msg = QMessageBox()
-        msg.setWindowTitle(title)
-        msg.setText(message)
-        msg.exec_()
-        
     def __init__(self):
         super().__init__()
         self.initUI()
@@ -27,54 +21,139 @@ class AudioExtractor(QWidget):
         
         # If a file is selected
         if mp4_file_path:
-            mp3_file_path = mp4_file_path.replace(".mp4", ".mp3")
-            self.extract_audio_from_video(mp4_file_path, mp3_file_path)
-            print(f"Audio extracted and saved as: {mp3_file_path}")
+            # Generate MP3 filename from the MP4 filename
+            base_name = os.path.basename(mp4_file_path) # Extract file name from the full path
+            mp3_file_path = os.path.splitext(base_name)[0] + ".mp3" # Replace .mp4 with .mp3
             
-            # Generate new audio with Eleven Labs voice
-            new_mp3_file_path = mp3_file_path.replace("mp3", "_new_voice.mp3")
-            self.generate_new_voice(mp3_file_path, new_mp3_file_path)
+            # Debug: Check the generated file name
+            print(f"Generated MP3 file path: {mp3_file_path}")
+            
+            # Show progress dialog for audio extraction
+            self.progress_dialog = QProgressDialog("Extracting audio...", "Cancel", 0, 100, self)
+            self.progress_dialog.setWindowTitle("Please wait")
+            self.progress_dialog.setAutoClose(True)
+            self.progress_dialog.setAutoReset(True)
+            self.progress_dialog.show()
+            
+            # Start audio extraction in a separate thread
+            self.audio_thread = AudioExtractionThread(mp4_file_path, mp3_file_path)
+            self.audio_thread.progress_signal.connect(self.update_progress)
+            self.audio_thread.finished_signal.connect(self.on_audio_extraction_done)
+            self.audio_thread.start()
         else:
             self.show_message("Error", "No file selected.")
+            
+    def show_message(self, title, message):
+        msg = QMessageBox()
+        msg.setWindowTitle(title)
+        msg.setText(message)
+        msg.exec_()
         
-    def extract_audio_from_video(self, mp4_file, mp3_file):
-        # Extract audio from the video file.
-        try:
-            video = VideoFileClip(mp4_file)
-            audio = video.audio
-            if audio:
-                audio.write_audiofile(mp3_file, codec='mp3')
-            else:
-                self.show_message("Error", "No audio found in the video.")
-        except Exception as e:
-            self.show_message("Error", f"An error occured while extracting audio: {e}")
+    def update_progress(self, value):
+        self.progress_dialog.setValue(value)
+        
+    def on_audio_extraction_done(self, mp3_file_path):
+        # Close the progress dialog after extraction is done
+        self.progress_dialog.close()
+        self.show_message("Success", f"Audio extracted and saved as: {mp3_file_path}")
+        
+        # Debug: Check the MP3 file path
+        print(f"MP3 file to be used for voice generation: {mp3_file_path}")
+        
+        # Proceed to generate new voice using the extracted MP3
+        new_mp3_file_path = mp3_file_path.replace("mp3", "_new_voice.mp3")
+        
+         # Debug: Check the new voice file path
+        print(f"Output file for voice generation: {new_mp3_file_path}")
     
+        self.generate_new_voice(mp3_file_path, new_mp3_file_path)
+        
     def generate_new_voice(self, mp3_file, output_file):
-        # Use Eleven Labs to generate new voice from the extracted audio.
+        
+        print(f"MP3 file to be used for voice generation: {mp3_file}")
+        print(f"Output file for voice generation: {output_file}")
+        
+        # Show progress dialog for voice generation
+        self.progress_dialog = QProgressDialog("Generating new voice...", "Cancel", 0, 100, self)
+        self.progress_dialog.setWindowTitle("Please wait")
+        self.progress_dialog.setAutoClose(True)
+        self.progress_dialog.setAutoReset(True)
+        self.progress_dialog.show()
+        
+        # Start API request in a separate thread
+        self.voice_thread = VoiceGenerationThread(mp3_file, output_file)
+        self.voice_thread.progress_signal.connect(self.update_progress)
+        self.voice_thread.finished_signal.connect(self.on_voice_generation_done)
+        self.voice_thread.start()
+        
+    def on_voice_generation_done(self, success, message):
+        self.progress_dialog.close()
+        if success:
+            self.show_message("Success", "Voice generated successfully.")
+        else:
+            self.show_message("Error", f"Voice generation failed: {message}")
+            
+class AudioExtractionThread(QThread):
+    progress_signal = pyqtSignal(int) # Signal to update progress
+    finished_signal = pyqtSignal(str) # Signal to notify when finished
+    
+    def __init__(self, mp4_file, mp3_file):
+        super().__init__()
+        self.mp4_file = mp4_file
+        self.mp3_file = mp3_file
+        
+    def run(self):
         try:
-            # Load the API key from environment variables
+            print(f"Extracting from: {self.mp4_file}")
+            print(f"Saving to MP3: {self.mp3_file}")
+            
+            # Extract audio from the video
+            video = VideoFileClip(self.mp4_file)
+            
+            # Ensure audio exists in the video
+            audio = video.audio
+            
+            if audio:
+                # Debug print to check the mp3 file path
+                print(f"Saving extracted audio to: {self.mp3_file}")
+                
+                # Wrtie the audio to the correct mp3 file path
+                audio.write_audiofile(self.mp3_file, codec='mp3')
+                
+            self.progress_signal.emit(100)
+            self.finished_signal.emit(self.mp3_file)
+        except Exception as e:
+            self.finished_signal.emit(str(e))
+            
+            
+class VoiceGenerationThread(QThread):
+    progress_signal = pyqtSignal(int) # Signal to update progress
+    finished_signal = pyqtSignal(bool, str)
+    
+    def __init__(self, mp3_file, output_file):
+        super().__init__()
+        self.mp3_file = mp3_file
+        self.output_file = output_file
+        print(f"Initialized VoiceGenerationThread with MP3 file: {self.mp3_file} and output file: {self.output_file}")
+        
+    def run(self):
+        try:
+            # Debug: Check MP3 file and output path
+            print(f"MP3 file passed to the thread: {self.mp3_file}")
+            print(f"Output file path: {self.output_file}")
+            
             XI_API_KEY = os.getenv("ELEVEN_LABS_API_KEY")
             if not XI_API_KEY:
-                self.show_message("Error", "API key not found. Please check your .env file.")
+                self.finished_signal.emit(False, "API key not found. Please check your .env file.")
                 return
             
-            # Define constants for the script
-            CHUNK_SIZE = 1024  # Size of chunks to read/write at a time
-            VOICE_ID = "EXAVITQu4vr4xnSDxMaL"  # ID of the voice model to use
-            AUDIO_FILE_PATH = mp3_file  # Path to the input audio file
-            OUTPUT_PATH = output_file  # Path to save the output audio file
-
-            # Construct the URL for the Speech-to-Speech API request
+            VOICE_ID = "EXAVITQu4vr4xnSDxMaL"
+            CHUNK_SIZE = 1024
             sts_url = f"https://api.elevenlabs.io/v1/speech-to-speech/{VOICE_ID}/stream"
-
-            # Set up headers for the API request, including the API key for authentication
             headers = {
                 "Accept": "application/json",
                 "xi-api-key": XI_API_KEY
             }
-
-            # Set up the data payload for the API request, including model ID and voice settings
-            # Note: voice settings are converted to a JSON string
             data = {
                 "model_id": "eleven_english_sts_v2",
                 "voice_settings": {
@@ -85,31 +164,31 @@ class AudioExtractor(QWidget):
                 }
             }
 
-            # Set up the files to send with the request, including the input audio file
-            
-            with open(AUDIO_FILE_PATH, "rb") as audio_file:
+            # Send request to API
+            with open(self.mp3_file, "rb") as audio_file:
                 files = {"audio": audio_file}
-                # Make the POST request to the STS API with headers, data, and files, enabling streaming response
                 response = requests.post(sts_url, headers=headers, data=data, files=files, stream=True)
-
-            # Check if the request was successful
-            if response.ok:
-                # Open the output file in write-binary mode
-                with open(OUTPUT_PATH, "wb") as f:
-                    # Read the response in chunks and write to the file
-                    for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                        f.write(chunk)
-                # Inform the user of success
-                print("Audio stream saved successfully.")
-            else:
-                # Print the error message if the request was not successful
-                self.show_message("Error", f"Request failed with status code {response.status_code}: {response.text}")
+                
+                if response.ok:
+                    total_size = int(response.headers.get('content-length', 0))
+                    bytes_downloaded = 0
+                    
+                    with open(self.output_file, "wb") as f:
+                        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                            if chunk:
+                                f.write(chunk)
+                                bytes_downloaded += len(chunk)
+                                progress = int(bytes_downloaded * 100 / total_size)
+                                self.progress_signal.emit(progress)
+                    self.finished_signal.emit(True, "Audio stream saved successfully.")
+                else:
+                    self.finished_signal.emit(False, response.text)
         except Exception as e:
-            self.show_message("Error", f"Voice generation failed: {e}")
-            
+            self.finished_signal.emit(False, str(e))
+      
     
 if __name__=='__main__':
     app = QApplication(sys.argv)
     window = AudioExtractor() # Run the Audio Extractor GUI
     window.show() # Show the widget
-    sys.exit(app.exec_()) # Srart the application event loop
+    sys.exit(app.exec_()) # Start the application event loop
