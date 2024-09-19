@@ -1,6 +1,3 @@
-Sure! Here’s a detailed documentation for the provided code:
-
-```markdown
 # Audio Extractor and Voice Generation
 
 This application extracts audio from MP4 video files and generates new voice audio using the extracted MP3 files. It utilizes PyQt5 for the GUI and MoviePy for audio extraction, along with an external API for voice generation.
@@ -87,6 +84,3 @@ This will open a file dialog to select an MP4 file, and the audio extraction pro
 ## Error Handling
 
 Error messages will be displayed through message boxes for any failures during audio extraction or voice generation. Ensure that the API key is valid and correctly set in the `.env` file to avoid authorization errors.
-```
-
-This documentation covers the functionality, classes, methods, and usage of your code. Let me know if you need any adjustments or additional details!
