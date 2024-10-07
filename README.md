@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-Sure! Here’s a detailed documentation for the provided code:
 
 ```markdown
 # Audio Extractor and Voice Generation
@@ -140,13 +138,4 @@ This will open a file dialog to select an MP4 file, and the audio extraction pro
 - Ensure that the MP4 video files selected have audio tracks; otherwise, the application will notify the user of the failure to extract audio.
 - The generated audio files will be saved in the same directory as the selected MP4 file, with appropriate naming conventions.
 
-## Error Handling
-<<<<<<< HEAD
 
-Error messages will be displayed through message boxes for any failures during audio extraction or voice generation. Ensure that the API key is valid and correctly set in the `.env` file to avoid authorization errors.
-```
-
-=======
-
-Error messages will be displayed through message boxes for any failures during audio extraction or voice generation. Ensure that the API key is valid and correctly set in the `.env` file to avoid authorization errors.
->>>>>>> dd7a8e151bc7a6a1f2b1eb001f318f134eef3d1a
